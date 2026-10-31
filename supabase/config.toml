@@ -1,0 +1,7 @@
+project_id = "spendwiseai"
+
+[edge_runtime.secrets]
+GROQ_API_KEY = "env(GROQ_API_KEY)"
+
+[functions.ai-chat]
+verify_jwt = true

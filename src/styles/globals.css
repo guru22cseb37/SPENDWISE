@@ -1,0 +1,242 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light theme */
+    --background: 220 14% 96%;
+    --foreground: 224 71% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71% 4%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71% 4%;
+    --primary: 238 84% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 90%;
+    --secondary-foreground: 224 71% 4%;
+    --muted: 220 14% 90%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 238 84% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 238 84% 60%;
+    --radius: 0.75rem;
+
+    /* Semantic finance colors */
+    --income: 160 84% 39%;
+    --expense: 352 95% 60%;
+    --warning: 38 92% 50%;
+    --neutral: 220 9% 46%;
+  }
+
+  .dark {
+    /* Midnight Ledger dark theme */
+    --background: 222 47% 7%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 10%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 10%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 238 84% 67%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 53%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 217 33% 20%;
+    --input: 217 33% 17%;
+    --ring: 238 84% 67%;
+    --radius: 0.75rem;
+
+    /* Semantic finance colors */
+    --income: 160 84% 39%;
+    --expense: 352 95% 60%;
+    --warning: 38 92% 50%;
+    --neutral: 215 20% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Tabular numerals for financial data */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground;
+  }
+
+  /* Focus visible styles */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Smooth transitions for theme switching */
+  * {
+    transition-property: background-color, border-color, color;
+    transition-duration: 150ms;
+    transition-timing-function: ease;
+  }
+
+  /* Override for elements where we don't want transition */
+  .no-transition,
+  .no-transition * {
+    transition: none !important;
+  }
+}
+
+@layer components {
+  /* Financial card base */
+  .fin-card {
+    @apply rounded-xl border bg-card text-card-foreground shadow-sm;
+  }
+
+  /* Gradient text */
+  .gradient-text-primary {
+    @apply bg-gradient-primary bg-clip-text text-transparent;
+  }
+
+  .gradient-text-income {
+    background: linear-gradient(135deg, #10b981, #34d399);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Income/expense color utilities */
+  .text-income { color: hsl(var(--income)); }
+  .text-expense { color: hsl(var(--expense)); }
+  .bg-income { background-color: hsl(var(--income)); }
+  .bg-expense { background-color: hsl(var(--expense)); }
+  .border-income { border-color: hsl(var(--income)); }
+  .border-expense { border-color: hsl(var(--expense)); }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    @apply animate-pulse bg-muted rounded-md;
+  }
+
+  /* Glass morphism */
+  .glass {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  /* Stat card */
+  .stat-value {
+    @apply text-financial-2xl font-bold tabular-nums tracking-tight;
+  }
+
+  .stat-label {
+    @apply text-sm text-muted-foreground font-medium;
+  }
+
+  /* Chart container */
+  .chart-container {
+    @apply w-full;
+  }
+
+  /* Navigation active state */
+  .nav-item-active {
+    @apply bg-primary/10 text-primary font-semibold;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer;
+  }
+
+  /* Recharts Global Tooltip High-Contrast Fix */
+  .recharts-default-tooltip {
+    background-color: #0b0f19 !important;
+    border: 1px solid #334155 !important;
+    border-radius: 12px !important;
+    color: #ffffff !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7) !important;
+    padding: 8px 12px !important;
+  }
+
+  .recharts-tooltip-label {
+    color: #cbd5e1 !important;
+    font-weight: 700 !important;
+    font-size: 12px !important;
+    margin-bottom: 3px !important;
+  }
+
+  .recharts-tooltip-item {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    font-size: 13px !important;
+  }
+
+  .recharts-tooltip-item-name {
+    color: #e2e8f0 !important;
+    font-weight: 600 !important;
+  }
+
+  .recharts-tooltip-item-value {
+    color: #38bdf8 !important;
+    font-weight: 800 !important;
+  }
+}
+
+@layer utilities {
+  /* Safe area for mobile */
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-left { padding-left: env(safe-area-inset-left); }
+  .safe-right { padding-right: env(safe-area-inset-right); }
+
+  /* Financial amount utilities */
+  .amount-positive { @apply text-emerald-income font-semibold tabular-nums; }
+  .amount-negative { @apply text-rose-expense font-semibold tabular-nums; }
+  .amount-neutral { @apply text-foreground font-semibold tabular-nums; }
+
+  /* Progress bar */
+  .progress-income { @apply bg-gradient-income; }
+  .progress-expense { @apply bg-gradient-expense; }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
