@@ -340,15 +340,15 @@ export default function BudgetsPage() {
                 Set a monthly budget (e.g. NT$ 25,000) or weekly limit (e.g. NT$ 6,000) to keep your Taiwan living costs under control.
               </p>
             </div>
-            <div className="flex items-center justify-center gap-3">
-              <Button onClick={() => setModalOpen(true)} className="gap-2">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-sm mx-auto pt-2">
+              <Button onClick={() => setModalOpen(true)} className="w-full sm:w-auto gap-2 font-semibold">
                 <Plus className="h-4 w-4" />
                 Create First Budget
               </Button>
               <Button
                 variant="outline"
                 onClick={() => resetDefaults(user?.id || 'local-user')}
-                className="gap-2"
+                className="w-full sm:w-auto gap-2"
               >
                 <RotateCcw className="h-4 w-4" />
                 Load Sample Budgets

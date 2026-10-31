@@ -62,8 +62,9 @@ export function AppShell({ children }: AppShellProps) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm pointer-events-auto"
+                className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm pointer-events-auto cursor-pointer"
                 onClick={() => setMobileSidebarOpen(false)}
+                onTouchEnd={() => setMobileSidebarOpen(false)}
                 aria-hidden="true"
               />
               <motion.div

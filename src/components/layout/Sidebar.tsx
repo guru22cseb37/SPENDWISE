@@ -62,9 +62,23 @@ export function Sidebar({ onClose, mobile }: SidebarProps) {
           </div>
         </div>
         {mobile && onClose && (
-          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close menu">
-            <X className="h-4 w-4" />
-          </Button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onClose()
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onClose()
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/80 hover:bg-secondary active:scale-90 text-foreground transition-all cursor-pointer border border-border/60 shadow-xs touch-manipulation"
+            aria-label="Close menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
         )}
       </div>
 
