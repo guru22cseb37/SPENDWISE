@@ -351,9 +351,23 @@ export function getSampleTransactions(userId: string = 'demo-user'): Transaction
   ]
 }
 
-function loadLocalTransactions(): Transaction[] {
+// Clean up legacy global dummy transactions if present
+try {
+  localStorage.removeItem('spendwise_transactions_v2')
+} catch {}
+
+function getTxStorageKey(userId?: string | null): string {
+  if (!userId || userId === 'guest' || userId === 'local-user') {
+    return 'spendwise_guest_txs'
+  }
+  return `spendwise_txs_${userId}`
+}
+
+function loadLocalTransactions(userId?: string | null): Transaction[] {
+  if (!userId) return []
   try {
-    const raw = localStorage.getItem(LOCAL_TX_KEY)
+    const key = getTxStorageKey(userId)
+    const raw = localStorage.getItem(key)
     if (raw !== null) {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed)) {
@@ -363,15 +377,14 @@ function loadLocalTransactions(): Transaction[] {
   } catch (err) {
     console.error('Error loading local transactions', err)
   }
-  // Auto-seed with rich Taiwan Dollars transactions only on very first launch
-  const samples = getSampleTransactions('demo-user')
-  saveLocalTransactions(samples)
-  return samples
+  // Never auto-seed dummy data into user accounts. Always return empty array []
+  return []
 }
 
-function saveLocalTransactions(txs: Transaction[]): void {
+function saveLocalTransactions(txs: Transaction[], userId?: string | null): void {
   try {
-    localStorage.setItem(LOCAL_TX_KEY, JSON.stringify(txs))
+    const key = getTxStorageKey(userId)
+    localStorage.setItem(key, JSON.stringify(txs))
   } catch (err) {
     console.error('Error saving local transactions', err)
   }
@@ -388,6 +401,7 @@ interface TransactionState {
   sort: TransactionSort
   lastDeleted: Transaction | null
   undoTimer: ReturnType<typeof setTimeout> | null
+  activeUserId: string | null
 
   // Actions
   fetchTransactions: (userId: string, page?: number) => Promise<void>
@@ -400,6 +414,7 @@ interface TransactionState {
   duplicateTransaction: (transaction: Transaction) => Promise<Transaction | null>
   loadSampleData: (userId?: string) => void
   clearAllData: () => void
+  clearMemory: () => void
   setFilters: (filters: TransactionFilters) => void
   setSort: (sort: TransactionSort) => void
   setPage: (page: number) => void
@@ -408,19 +423,20 @@ interface TransactionState {
 
 export const useTransactionStore = create<TransactionState>()(
   subscribeWithSelector((set, get) => ({
-    transactions: loadLocalTransactions(),
+    transactions: [],
     categories: DEFAULT_CATEGORIES,
     loading: false,
     error: null,
-    totalCount: loadLocalTransactions().length,
+    totalCount: 0,
     currentPage: 1,
     filters: {},
     sort: { field: 'date', direction: 'desc' },
     lastDeleted: null,
     undoTimer: null,
+    activeUserId: null,
 
     fetchTransactions: async (userId, page = 1) => {
-      set({ loading: true, error: null })
+      set({ loading: true, error: null, activeUserId: userId })
       try {
         const from = (page - 1) * PAGE_SIZE
         const to = from + PAGE_SIZE - 1
@@ -431,19 +447,31 @@ export const useTransactionStore = create<TransactionState>()(
           .eq('user_id', userId)
           .range(from, to)
 
-        if (error || !data) {
-          throw error || new Error('Remote not found')
+        if (error) {
+          throw error
         }
 
+        if (data && data.length > 0) {
+          const list = data as Transaction[]
+          saveLocalTransactions(list, userId)
+          set({
+            transactions: list,
+            totalCount: count || list.length,
+            currentPage: page,
+            loading: false,
+          })
+          return
+        }
+
+        const local = loadLocalTransactions(userId)
         set({
-          transactions: (data as Transaction[]) || [],
-          totalCount: count || 0,
+          transactions: local,
+          totalCount: local.length,
           currentPage: page,
           loading: false,
         })
       } catch {
-        // Fallback to local storage
-        const local = loadLocalTransactions()
+        const local = loadLocalTransactions(userId)
         set({
           transactions: local,
           totalCount: local.length,
@@ -454,6 +482,7 @@ export const useTransactionStore = create<TransactionState>()(
     },
 
     fetchAllTransactions: async (userId) => {
+      set({ activeUserId: userId })
       try {
         const { data, error } = await supabase
           .from('transactions')
@@ -461,15 +490,22 @@ export const useTransactionStore = create<TransactionState>()(
           .eq('user_id', userId)
           .order('date', { ascending: false })
 
-        if (error || !data) {
-          throw error || new Error('Remote not found')
+        if (error) {
+          throw error
         }
 
-        set({ transactions: (data as Transaction[]) || [] })
+        if (data && data.length > 0) {
+          const list = data as Transaction[]
+          saveLocalTransactions(list, userId)
+          set({ transactions: list, totalCount: list.length })
+          return
+        }
+
+        const local = loadLocalTransactions(userId)
+        set({ transactions: local, totalCount: local.length })
       } catch {
-        // Load local
-        const local = loadLocalTransactions()
-        set({ transactions: local })
+        const local = loadLocalTransactions(userId)
+        set({ transactions: local, totalCount: local.length })
       }
     },
 
@@ -538,10 +574,10 @@ export const useTransactionStore = create<TransactionState>()(
         // Safe fallback
       }
 
-      // Always save locally so the app works reliably!
+      // Always save locally scoped to this user
       const currentList = get().transactions
       const updatedList = [newTx, ...currentList]
-      saveLocalTransactions(updatedList)
+      saveLocalTransactions(updatedList, userId)
 
       set({
         transactions: updatedList,
@@ -578,7 +614,7 @@ export const useTransactionStore = create<TransactionState>()(
         }
       })
 
-      saveLocalTransactions(updatedList)
+      saveLocalTransactions(updatedList, get().activeUserId)
       set({ transactions: updatedList, loading: false })
     },
 
@@ -587,7 +623,7 @@ export const useTransactionStore = create<TransactionState>()(
       const toDelete = currentList.find(t => t.id === id) || null
       const updatedList = currentList.filter(t => t.id !== id)
 
-      saveLocalTransactions(updatedList)
+      saveLocalTransactions(updatedList, get().activeUserId)
       set({
         transactions: updatedList,
         totalCount: updatedList.length,
@@ -600,11 +636,11 @@ export const useTransactionStore = create<TransactionState>()(
     },
 
     undoDelete: async () => {
-      const { lastDeleted, transactions } = get()
+      const { lastDeleted, transactions, activeUserId } = get()
       if (!lastDeleted) return
 
       const restoredList = [lastDeleted, ...transactions]
-      saveLocalTransactions(restoredList)
+      saveLocalTransactions(restoredList, activeUserId)
       set({
         transactions: restoredList,
         totalCount: restoredList.length,
@@ -629,9 +665,9 @@ export const useTransactionStore = create<TransactionState>()(
       })
     },
 
-    loadSampleData: (userId = 'current-user') => {
+    loadSampleData: (userId = 'guest') => {
       const samples = getSampleTransactions(userId)
-      saveLocalTransactions(samples)
+      saveLocalTransactions(samples, userId)
       set({
         transactions: samples,
         totalCount: samples.length,
@@ -640,10 +676,20 @@ export const useTransactionStore = create<TransactionState>()(
     },
 
     clearAllData: () => {
-      saveLocalTransactions([])
+      saveLocalTransactions([], get().activeUserId)
       set({
         transactions: [],
         totalCount: 0,
+      })
+    },
+
+    clearMemory: () => {
+      set({
+        transactions: [],
+        totalCount: 0,
+        activeUserId: null,
+        loading: false,
+        error: null,
       })
     },
 

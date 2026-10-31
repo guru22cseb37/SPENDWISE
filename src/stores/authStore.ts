@@ -9,11 +9,12 @@ import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { UserProfile } from '@/types'
 
-const PROFILE_STORAGE_KEY = 'spendwise_user_profile_v2'
+const PROFILE_STORAGE_KEY = 'spendwise_user_profile_guest'
 
-function getInitialProfile(): UserProfile {
+function getInitialProfile(userId?: string): UserProfile {
+  const key = userId ? `spendwise_user_profile_${userId}` : PROFILE_STORAGE_KEY
   try {
-    const raw = localStorage.getItem(PROFILE_STORAGE_KEY)
+    const raw = localStorage.getItem(key)
     if (raw) {
       const parsed = JSON.parse(raw)
       if (parsed && typeof parsed === 'object') return parsed
@@ -21,8 +22,8 @@ function getInitialProfile(): UserProfile {
   } catch {}
 
   const defaultProf: UserProfile = {
-    id: 'local-user',
-    display_name: 'Master',
+    id: userId || 'local-user',
+    display_name: 'User',
     avatar_url: null,
     currency: 'TWD',
     locale: 'zh-TW',
@@ -35,7 +36,7 @@ function getInitialProfile(): UserProfile {
   }
 
   try {
-    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(defaultProf))
+    localStorage.setItem(key, JSON.stringify(defaultProf))
   } catch {}
 
   return defaultProf
@@ -60,18 +61,56 @@ export const useAuthStore = create<AuthState>()(
   subscribeWithSelector((set, get) => ({
     user: null,
     session: null,
-    profile: getInitialProfile(),
+    profile: null,
     loading: false,
     initialized: true,
 
     setSession: (session) => {
-      set({ session, user: session?.user ?? null })
+      const user = session?.user ?? null
+      if (user) {
+        const userKey = `spendwise_user_profile_${user.id}`
+        let prof: UserProfile | null = null
+        try {
+          const raw = localStorage.getItem(userKey)
+          if (raw) prof = JSON.parse(raw)
+        } catch {}
+
+        if (!prof) {
+          const detectedName =
+            user.user_metadata?.display_name ||
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            (user.email ? user.email.split('@')[0] : 'User')
+
+          prof = {
+            id: user.id,
+            display_name: detectedName,
+            avatar_url: user.user_metadata?.avatar_url || null,
+            currency: 'TWD',
+            locale: 'zh-TW',
+            opening_balance_minor: 0,
+            theme: 'dark',
+            onboarding_complete: true,
+            ai_consent: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+          try {
+            localStorage.setItem(userKey, JSON.stringify(prof))
+          } catch {}
+        }
+        set({ session, user, profile: prof })
+      } else {
+        set({ session, user: null, profile: null })
+      }
     },
 
     setProfile: (profile) => {
       if (profile) {
+        const user = get().user
+        const key = user ? `spendwise_user_profile_${user.id}` : PROFILE_STORAGE_KEY
         try {
-          localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile))
+          localStorage.setItem(key, JSON.stringify(profile))
         } catch {}
       }
       set({ profile })
@@ -79,7 +118,15 @@ export const useAuthStore = create<AuthState>()(
 
     signOut: async () => {
       await supabase.auth.signOut().catch(() => {})
-      set({ user: null, session: null })
+      try {
+        const { useTransactionStore } = await import('@/stores/transactionStore')
+        useTransactionStore.getState().clearMemory()
+      } catch {}
+      try {
+        const { useBudgetStore } = await import('@/stores/budgetStore')
+        useBudgetStore.getState().clearMemory()
+      } catch {}
+      set({ user: null, session: null, profile: null })
     },
 
     fetchProfile: async (userId) => {
@@ -91,31 +138,32 @@ export const useAuthStore = create<AuthState>()(
           .single()
 
         if (!error && data) {
+          const key = `spendwise_user_profile_${userId}`
           try {
-            localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(data))
+            localStorage.setItem(key, JSON.stringify(data))
           } catch {}
           set({ profile: data as UserProfile })
         }
       } catch {
-        // Local profile remains active
+        // Fallback profile if any
       }
     },
 
     updateProfile: async (updates) => {
-      const current = get().profile || getInitialProfile()
+      const user = get().user
+      const current = get().profile || getInitialProfile(user?.id)
       const updated: UserProfile = {
         ...current,
         ...updates,
         updated_at: new Date().toISOString(),
       }
 
-      // Always update local state immediately
       set({ profile: updated })
+      const key = user ? `spendwise_user_profile_${user.id}` : PROFILE_STORAGE_KEY
       try {
-        localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(updated))
+        localStorage.setItem(key, JSON.stringify(updated))
       } catch {}
 
-      const user = get().user
       if (user) {
         ;(async () => {
           try {

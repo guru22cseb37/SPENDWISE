@@ -206,6 +206,11 @@ export default function DashboardPage() {
   )
 
   const greeting = taiwanHour < 12 ? 'morning' : taiwanHour < 17 ? 'afternoon' : 'evening'
+  const userName =
+    profile?.display_name ||
+    user?.user_metadata?.display_name ||
+    user?.user_metadata?.full_name ||
+    (user?.email ? user.email.split('@')[0] : 'Friend')
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
@@ -219,7 +224,7 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <span>Good {greeting},</span>{' '}
             <span className="text-primary font-extrabold bg-gradient-to-r from-primary via-indigo-400 to-purple-400 bg-clip-text text-transparent">
-              Master
+              {userName}
             </span>
           </h1>
           <div className="flex flex-wrap items-center gap-2 mt-1.5 text-sm text-muted-foreground">

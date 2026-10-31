@@ -371,7 +371,7 @@ export function exportPrintablePDFReport(
         </table>
 
         <div class="footer">
-          <span>SpendWise AI — Know your money. Own your future. (Prepared for Master)</span>
+          <span>SpendWise AI — Know your money. Own your future.</span>
           <span>Dual Currency Engine: New Taiwan Dollar (NT$) & Indian Rupee (₹)</span>
         </div>
 

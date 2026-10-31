@@ -14,66 +14,48 @@ interface BudgetState {
   budgets: Budget[]
   loading: boolean
   error: string | null
+  activeUserId: string | null
   fetchBudgets: (userId?: string) => Promise<void>
   addBudget: (userId: string, data: BudgetFormData) => Promise<Budget>
   updateBudget: (id: string, updates: Partial<Budget>) => Promise<void>
   deleteBudget: (id: string) => Promise<void>
   clearAllBudgets: () => void
   resetDefaults: (userId: string) => void
+  clearMemory: () => void
 }
 
-const STORAGE_KEY = 'spendwise_budgets_v2'
+// Clean up legacy global dummy budgets if present
+try {
+  localStorage.removeItem('spendwise_budgets_v2')
+} catch {}
 
-function getInitialBudgets(userId: string): Budget[] {
-  const saved = localStorage.getItem(STORAGE_KEY)
+function getBudgetStorageKey(userId?: string | null): string {
+  if (!userId || userId === 'guest' || userId === 'local-user') {
+    return 'spendwise_guest_budgets'
+  }
+  return `spendwise_budgets_${userId}`
+}
+
+function getInitialBudgets(userId?: string | null): Budget[] {
+  if (!userId) return []
+  const key = getBudgetStorageKey(userId)
+  const saved = localStorage.getItem(key)
   if (saved !== null) {
     try {
       const parsed = JSON.parse(saved)
       if (Array.isArray(parsed)) return parsed
     } catch {
-      // Fall through to defaults
+      // Fall through
     }
   }
-
-  const now = new Date()
-  const yyyy = now.getFullYear()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const startDate = `${yyyy}-${mm}-01`
-
-  const defaults: Budget[] = [
-    {
-      id: 'b-default-monthly',
-      user_id: userId,
-      period: 'monthly',
-      total_minor: 2500000, // NT$ 25,000 (or ₹25,000 depending on currency)
-      start_date: startDate,
-      end_date: null,
-      warn_threshold_pct: 75,
-      alert_threshold_pct: 90,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: 'b-default-weekly',
-      user_id: userId,
-      period: 'weekly',
-      total_minor: 600000, // NT$ 6,000
-      start_date: startDate,
-      end_date: null,
-      warn_threshold_pct: 70,
-      alert_threshold_pct: 85,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ]
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults))
-  return defaults
+  // DO NOT auto-create default fake budgets! New accounts start completely clean.
+  return []
 }
 
-function persistBudgets(budgets: Budget[]) {
+function persistBudgets(budgets: Budget[], userId?: string | null) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(budgets))
+    const key = getBudgetStorageKey(userId)
+    localStorage.setItem(key, JSON.stringify(budgets))
   } catch (err) {
     console.error('Failed to persist budgets:', err)
   }
@@ -83,29 +65,31 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
   budgets: [],
   loading: false,
   error: null,
+  activeUserId: null,
 
   fetchBudgets: async (userId?: string) => {
-    const uid = userId || 'local-user'
-    set({ loading: true, error: null })
+    const uid = userId || 'guest'
+    set({ loading: true, error: null, activeUserId: uid })
 
-    // Load from local storage immediately for speed
+    // Load from local storage for this specific user
     const local = getInitialBudgets(uid)
     set({ budgets: local, loading: false })
 
     // Attempt remote sync if authenticated
-    if (userId && userId !== 'local-user') {
+    if (userId && userId !== 'guest' && userId !== 'local-user') {
       try {
         const { data, error } = await supabase
           .from('budgets')
           .select('*')
           .eq('user_id', userId)
 
-        if (!error && data && data.length > 0) {
-          set({ budgets: data as Budget[] })
-          persistBudgets(data as Budget[])
+        if (!error && data) {
+          const list = data as Budget[]
+          set({ budgets: list })
+          persistBudgets(list, userId)
         }
       } catch {
-        // Fallback to local data is already active
+        // Local data remains active
       }
     }
   },
@@ -117,7 +101,7 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
 
     const newBudget: Budget = {
       id: crypto.randomUUID(),
-      user_id: userId || 'local-user',
+      user_id: userId || 'guest',
       period: data.period,
       total_minor: Math.round(data.total_amount * 100),
       start_date: data.start_date || `${yyyy}-${mm}-01`,
@@ -130,9 +114,9 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
 
     const updated = [newBudget, ...get().budgets]
     set({ budgets: updated })
-    persistBudgets(updated)
+    persistBudgets(updated, userId)
 
-    if (userId && userId !== 'local-user') {
+    if (userId && userId !== 'guest' && userId !== 'local-user') {
       try {
         await (supabase.from('budgets').insert(newBudget as any) as any)
       } catch {
@@ -144,11 +128,12 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
   },
 
   updateBudget: async (id: string, updates: Partial<Budget>) => {
+    const activeUid = get().activeUserId || 'guest'
     const updated = get().budgets.map(b =>
       b.id === id ? { ...b, ...updates, updated_at: new Date().toISOString() } : b
     )
     set({ budgets: updated })
-    persistBudgets(updated)
+    persistBudgets(updated, activeUid)
 
     try {
       const { id: _id, created_at: _ca, user_id: _uid, ...validUpdates } = updates
@@ -159,9 +144,10 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
   },
 
   deleteBudget: async (id: string) => {
+    const activeUid = get().activeUserId || 'guest'
     const updated = get().budgets.filter(b => b.id !== id)
     set({ budgets: updated })
-    persistBudgets(updated)
+    persistBudgets(updated, activeUid)
 
     try {
       await (supabase.from('budgets').delete().eq('id', id) as any)
@@ -171,13 +157,49 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
   },
 
   clearAllBudgets: () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([]))
+    const activeUid = get().activeUserId || 'guest'
+    persistBudgets([], activeUid)
     set({ budgets: [] })
   },
 
   resetDefaults: (userId: string) => {
-    localStorage.removeItem(STORAGE_KEY)
-    const defaults = getInitialBudgets(userId || 'local-user')
+    const now = new Date()
+    const yyyy = now.getFullYear()
+    const mm = String(now.getMonth() + 1).padStart(2, '0')
+    const startDate = `${yyyy}-${mm}-01`
+
+    const defaults: Budget[] = [
+      {
+        id: 'b-default-monthly',
+        user_id: userId,
+        period: 'monthly',
+        total_minor: 2500000,
+        start_date: startDate,
+        end_date: null,
+        warn_threshold_pct: 75,
+        alert_threshold_pct: 90,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: 'b-default-weekly',
+        user_id: userId,
+        period: 'weekly',
+        total_minor: 600000,
+        start_date: startDate,
+        end_date: null,
+        warn_threshold_pct: 70,
+        alert_threshold_pct: 85,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ]
+
+    persistBudgets(defaults, userId)
     set({ budgets: defaults })
+  },
+
+  clearMemory: () => {
+    set({ budgets: [], activeUserId: null, loading: false, error: null })
   },
 }))

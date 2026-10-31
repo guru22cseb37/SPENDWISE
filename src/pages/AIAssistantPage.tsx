@@ -165,18 +165,23 @@ export default function AIAssistantPage() {
       }))
 
       const systemMessage = `${TAIWAN_FINANCIAL_SYSTEM_PROMPT}
-
-CURRENT FINANCIAL CONTEXT FOR USER (${financialContext.period}):
+${financialContext.transaction_count > 0 ? `
+CURRENT USER FINANCIAL SNAPSHOT (${financialContext.period}):
 - Primary Currency: ${financialContext.currency} (Dual: ${financialContext.exchangeRateText})
-- Total Monthly Income: ${financialContext.current_month_income}
-- Total Monthly Expenses: ${financialContext.current_month_expenses}
-- Net Balance/Savings: ${financialContext.current_month_net} (Savings Rate: ${financialContext.savings_rate})
-- Previous Month Expenses: ${financialContext.previous_month_expenses}
-- Recorded Transactions Count: ${financialContext.transaction_count}
+- Total Income: ${financialContext.current_month_income}
+- Total Expenses: ${financialContext.current_month_expenses}
+- Net Balance: ${financialContext.current_month_net} (Savings Rate: ${financialContext.savings_rate})
+- Recorded Transactions: ${financialContext.transaction_count}
 - Top Categories: ${financialContext.top_categories.map(c => `${c.name}: ${c.amount} (${c.percent})`).join(', ')}
 ${financialContext.recent_transactions?.length ? `- Recent Spends: ${financialContext.recent_transactions.map(t => `${t.merchant} [${t.category}] ${t.amount}`).join('; ')}` : ''}
-
-Always incorporate dual currency references (TWD NT$ and INR ₹) when discussing amounts, and highlight Taiwan-specific savings tips where relevant.`
+` : `
+CURRENT USER FINANCIAL SNAPSHOT:
+- The user has not logged any transactions yet.
+`}
+CRITICAL INSTRUCTION:
+- If the user sends a greeting (e.g. "hey", "hello", "hey buddy", "how are you"), respond warmly and conversationally in 1-2 friendly sentences. Do NOT generate financial tables or audits for greetings!
+- If the user asks a specific question, answer that exact question directly, concisely, and helpfully.
+- Only provide a comprehensive audit table or breakdown if the user explicitly asks for a spending report, audit, or monthly summary.`
 
       const responseText = await callGroqAPI([
         { role: 'system', content: systemMessage },
